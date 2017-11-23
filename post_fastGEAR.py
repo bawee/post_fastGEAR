@@ -19,7 +19,7 @@ from matplotlib.colors import ListedColormap
 import os.path
 
 #added by BW
-from matplotlib.ticker import FuncFormatter, MaxNLocator, MultipleLocator, FormatStrFormatter
+from matplotlib.ticker import FuncFormatter, MaxNLocator, MultipleLocator, FixedLocator, FormatStrFormatter
 
 
 
@@ -33,15 +33,16 @@ def main():
     parser.add_argument("-g", type=str, help="Genes of interest GOI list. Can be comma separated after flag GOI1,GOI2,GOI3 or a file.txt with one GOI per line. GOIs need to be named exactly as per fastGEAR run", default = None)
     parser.add_argument("-b", type=str, help="Sample of interest SOI list. Can be comma separated after flag SOI1,SOI2,SOI3 or a file.txt with one SOI per line. SOIs need to be named exactly as per fastGEAR run", default = None)
     parser.add_argument("-t", type=int, help="Threads")
-    parser.add_argument("-y", type=int, help="Minimum y value to display gene name in scatter plot", default = 4)
-    parser.add_argument("-x", type=int, help="Minimum x value to display gene name in scatter plot", default = 4)
+    parser.add_argument("-y", type=int, help="Minimum y value to display gene name is scatter plot", default = 4)
+    parser.add_argument("-x", type=int, help="Minimum y value to display gene name is scatter plot", default = 4)
     parser.add_argument("-s", type=str2bool, help="Make scatter plot of recent Vs ancestral recombinations", default = True)
     parser.add_argument("-z", type=str2bool, help="Make heatmap of recombinations. Default True", default = True)
     parser.add_argument("-u", type=str2bool, help="Make recombinations per gene plot. Default True", default = True)
     parser.add_argument("-a", type=str2bool, help="Include ancestral recombination. Default True", default = True)
     parser.add_argument("-r", type=str2bool, help="Exclude genes that had no recombination. Default True", default = True)
     parser.add_argument("-p", type=str, help="Tree file for sample order OR txt file of samples in order one per line must end in .txt or will parse as tree file.")
-    parser.add_argument("-d", type=int, help="Division factor to draw ticks in heatmap", default = 10)
+    parser.add_argument("-d", type=int, help="Division factor to draw ticks in heatmap. If 0, will use gene boundaries", default = 10)
+    parser.add_argument("-f", type=str, help="File type. Default SVG.", default = 'svg')
 
     args = parser.parse_args()
 
@@ -79,16 +80,32 @@ def main():
                 for gene_patch in gene_patch_list:
                     ax.add_patch(gene_patch)
 
-        #BW Divide x axis by number of fractions given by -d flag
-        divisionFactor = args.d
-        ax.xaxis.set_major_locator(MultipleLocator(1/divisionFactor)) #Sets ticks at intervals of given by -d.
-        ax.set_xticklabels(frange((0-(cumulativeLen/divisionFactor)), cumulativeLen, cumulativeLen/divisionFactor), fontsize=8, rotation='vertical')
+        #BW Divide x axis by number of fractions, or by gene boundaries, depending on -d flag
+        cumulativeLenlist = []
+        if args.d is 0:
+            #Set ticks by genes
+            cumulativeLen2 = 0
+            listOfGenes = []
+            for key in gene_len_dict:
+                cumulativeLen2 = cumulativeLen2 + gene_len_dict[key]
+                cumulativeLenlist.append(cumulativeLen2/cumulativeLen)
+                listOfGenes.append(key) #get list of genes for label
+                ax.xaxis.set_major_locator(FixedLocator(cumulativeLenlist)) #Sets ticks at intervals of given by -d.
+                ax.set_xticklabels((listOfGenes), fontsize=8, rotation='vertical')
+
+        else:
+            divisionFactor = args.d
+            ax.xaxis.set_major_locator(MultipleLocator(1/divisionFactor)) #Sets ticks at intervals of given by -d.
+            ax.set_xticklabels(frange((0-(cumulativeLen/divisionFactor)), cumulativeLen, cumulativeLen/divisionFactor), fontsize=8, rotation='vertical')
 
         ax.yaxis.set_major_locator(MultipleLocator(1/MaxYaxis)) #BW Sets ticks to match the number of taxa
         ax.set_yticklabels(frange(0, MaxYaxis, 1/MaxYaxis), fontsize=0) #Sets labels for y-axis to invisible (size 0)
 
-        fig.savefig(args.o + '_heat.svg', dpi=300, bbox_inches='tight') #BW changed to svg
+        fig.savefig(args.o + '_heat.' + args.f, dpi=300, bbox_inches='tight') #BW changed to svg
         plt.close('all')
+
+    colors.pop(int(most_common_lineage))#get rid of yellow after using it as background
+
 
     if args.u:
         print ('Making recombination count plot')
@@ -143,7 +160,7 @@ def main():
             p = patches.Rectangle((x, 0.0), gene_len_percent, height, facecolor=c,edgecolor=None)
             ax.add_patch(p)
         plt.title('Recombinations per ' + str(len(recombinations)) + ' gene')
-        plt.savefig(args.o + '_recombination_count.png', dpi=300, bbox_inches='tight')
+        plt.savefig(args.o + '_recombination_count.' + args.f, dpi=300, bbox_inches='tight')
         plt.close('all')
     if args.s:
         print ('Getting recombinations per gene')
@@ -175,7 +192,7 @@ def main():
                 print(label) #Print out labels to screen that meet the threshold - BW
                 plt.annotate(label, xy = (x, y), fontsize=6, xytext=(-10, 10), textcoords='offset pixels') #
 
-        plt.savefig(args.o + '_scatter.png', dpi=300, bbox_inches='tight')
+        plt.savefig(args.o + '_scatter.' + args.f, dpi=300, bbox_inches='tight')
         plt.close('all')
 
 def str2bool(v):
@@ -300,7 +317,7 @@ def parse_tree(args):
         Phylo.draw(t, do_show=False, axes=ax)
         pylab.axis('off')
         pylab.rcParams.update({'font.size': 0.5})
-        pylab.savefig(args.o+'_tree.png',format='png', bbox_inches='tight', dpi=300)
+        pylab.savefig(args.o+'_tree.' + args.f,format='png', bbox_inches='tight', dpi=300)
         plt.close('all')
         #write
         with open('order_of_samples_from_tree.txt', 'w') as fout:
